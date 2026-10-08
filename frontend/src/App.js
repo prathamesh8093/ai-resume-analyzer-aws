@@ -27,7 +27,8 @@ import {
   Lightbulb,
   Zap,
   Globe,
-  Gauge
+  Gauge,
+  Cpu
 } from 'lucide-react';
 
 const API_BASE_URL = 'https://8n7ezhiic4.execute-api.ap-south-1.amazonaws.com';
@@ -198,15 +199,15 @@ export default function App() {
           title: `Senior ${role}`,
           company: 'CloudScale Technologies',
           location: 'Bengaluru, India (Hybrid)',
-          applyLink: 'https://www.linkedin.com/jobs',
+          applyLink: 'https://cloudscaletechnology.com/service.html',
           isRemote: true
         },
         {
           jobId: 'fallback-2',
           title: `${role}`,
-          company: 'Nexus Digital Systems',
+          company: 'Nexus Digital Technologies',
           location: 'Hyderabad, India (Remote)',
-          applyLink: 'https://www.naukri.com',
+          applyLink: 'https://www.nexusdigitaltechnologies.com/Services.html',
           isRemote: true
         },
         {
@@ -214,7 +215,7 @@ export default function App() {
           title: `Associate ${role}`,
           company: 'Infosys Innovation Labs',
           location: 'Pune, India',
-          applyLink: 'https://www.glassdoor.com',
+          applyLink: 'https://www.infosys.com/careers/apply.html',
           isRemote: false
         }
       ];
@@ -496,11 +497,55 @@ export default function App() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col min-h-screen">
         {/* Navigation / Header */}
         <header className="flex items-center pb-6 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
-              <Sparkles className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3.5">
+            {/* Animated Intelligence Brain/Circuit Orb */}
+            <div className="relative w-12 h-12 flex items-center justify-center select-none group">
+              {/* Outer Ambient Glow Mesh */}
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 opacity-40 blur-sm animate-pulse-glow" />
+
+              {/* Slower Spinning Circular Gradient Boundary */}
+              <div 
+                className="absolute inset-0 rounded-2xl p-[2px] bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 animate-spin"
+                style={{ animationDuration: '6s' }}
+              >
+                <div className="w-full h-full rounded-[14px] bg-white" />
+              </div>
+
+              {/* Counter-Spinning Subtle Mesh Ring */}
+              <div 
+                className="absolute inset-[3px] rounded-xl border border-dashed border-indigo-300/60 animate-spin-reverse pointer-events-none"
+              />
+
+              {/* Inner Core Container */}
+              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-50 via-white to-purple-50/70 flex items-center justify-center overflow-hidden shadow-inner">
+                {/* Fast-Pulsing Cybernetic Core Ping */}
+                <div className="absolute w-5 h-5 rounded-full bg-indigo-500/25 animate-ping pointer-events-none" />
+
+                {/* Radar Sweep Scanning Beam */}
+                <div 
+                  className="absolute inset-0 animate-radar pointer-events-none opacity-40"
+                  style={{
+                    background: 'conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(99, 102, 241, 0.4) 360deg)'
+                  }}
+                />
+
+                {/* High-Tech Circuit/Microchip Icon */}
+                <div className="relative z-10 flex items-center justify-center text-indigo-600">
+                  <Cpu className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
+                  {/* Glowing Core Sparkle Node */}
+                  <span className="absolute w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+                </div>
+              </div>
+
+              {/* Floating Digital Particle System (Orbiting Particles) */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <span className="absolute w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee] animate-particle-1" />
+                <span className="absolute w-1 h-1 rounded-full bg-indigo-500 shadow-[0_0_4px_#6366f1] animate-particle-2" />
+              </div>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+
+            {/* Shimmering Animated Title */}
+            <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 bg-[length:200%_auto] bg-clip-text text-transparent animate-shimmer">
               AI Resume Analyzer
             </h1>
           </div>

@@ -35,3 +35,92 @@ code, pre {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Shimmer Animation for Gradient Text */
+@keyframes text-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-shimmer {
+  background-size: 200% auto;
+  animation: text-shimmer 3.5s ease-in-out infinite;
+}
+
+/* Radar Sweep Beam Animation */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-radar {
+  animation: radar-sweep 2.8s linear infinite;
+}
+
+/* Reverse Orbit Animation */
+@keyframes spin-reverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 8s linear infinite;
+}
+
+/* Pulse Glow Animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.06);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Micro Particle Orbit Animations */
+@keyframes particle-orbit-1 {
+  0% {
+    transform: rotate(0deg) translateX(20px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(20px) rotate(-360deg);
+  }
+}
+
+.animate-particle-1 {
+  animation: particle-orbit-1 4.5s linear infinite;
+}
+
+@keyframes particle-orbit-2 {
+  0% {
+    transform: rotate(180deg) translateX(22px) rotate(-180deg);
+  }
+  100% {
+    transform: rotate(540deg) translateX(22px) rotate(-540deg);
+  }
+}
+
+.animate-particle-2 {
+  animation: particle-orbit-2 6s linear infinite;
+}
