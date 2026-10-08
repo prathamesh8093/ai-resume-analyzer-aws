@@ -1,0 +1,35 @@
+# Environment variables containing sensitive AWS Keys
+.env
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+nlp_engine/.env
+backend/.env
+frontend/.env
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python virtual environment & cache
+nlp_engine/venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build outputs
+frontend/dist/
+frontend/build/
+.serverless/
+
+# IDE and System files
+.DS_Store
+.vscode/
+.idea/
+*.swp
