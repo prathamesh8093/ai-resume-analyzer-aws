@@ -253,3 +253,6 @@ app.get("/api/get-live-jobs", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch domain job listings" });
   }
 });
+
+const serverless = require('serverless-http');
+module.exports.handler = serverless(app);

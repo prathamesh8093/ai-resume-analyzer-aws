@@ -1,0 +1,17 @@
+service: ai-resume-analyzer-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  memorySize: 512
+  timeout: 15
+  environment:
+    AWS_S3_BUCKET: project-resume-analyzer-bucket-2026
+    DYNAMODB_TABLE: ResumeScores
+
+functions:
+  api:
+    handler: server.handler
+    events:
+      - httpApi: '*'
