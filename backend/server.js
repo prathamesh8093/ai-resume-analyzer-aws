@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
+const pdfParse = require("pdf-parse");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { PutCommand, GetCommand } = require("@aws-sdk/lib-dynamodb");
@@ -9,6 +11,52 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Memory storage for PDF buffer parsing
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Endpoint: Extract Real Text from Uploaded PDF Buffer
+app.post("/api/extract-text", upload.single("resume"), async (req, res) => {
+  try {
+    let pdfBuffer = null;
+
+    if (req.file && req.file.buffer) {
+      pdfBuffer = req.file.buffer;
+    } else if (req.body && req.body.base64) {
+      pdfBuffer = Buffer.from(req.body.base64, "base64");
+    }
+
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      return res.status(400).json({
+        error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
+      });
+    }
+
+    const data = await pdfParse(pdfBuffer);
+    const extractedText = (data && data.text) ? data.text.trim() : "";
+
+    // Require valid readable text extracted from the document
+    if (!extractedText || extractedText.length < 20) {
+      return res.status(400).json({
+        error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
+      });
+    }
+
+    res.json({
+      success: true,
+      text: extractedText,
+      numPages: data.numpages || 1
+    });
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    res.status(400).json({
+      error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
+    });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 
@@ -386,7 +434,7 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
     summaryText = `Performance-driven professional with hands-on background demonstrated through documented projects and experience, targeting ${targetRole} positions. Proven expertise in solving engineering problems, delivering maintainable solutions, and contributing to technical excellence.`;
   }
 
-  // Clean and format experience items (Strict Fact Preservation: Only upgrade existing bullet verbs)
+  // Clean and format experience items (Strict Fact Preservation: Only upgrade existing bullet verbs, preserving exact jobs)
   const experienceBlocks = [];
   if (sections.experience.length > 0) {
     let currentBlock = [];
@@ -397,7 +445,7 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
         const upgraded = upgradeBulletPoint(cleanBullet);
         currentBlock.push(`- ${upgraded}`);
       } else {
-        // Potential title, company, or date line
+        // Line representing role / company / dates: start a new job block if bullets were previously accumulated
         if (currentBlock.length > 0) {
           experienceBlocks.push(currentBlock.join("\n"));
           currentBlock = [];
@@ -410,7 +458,7 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
     }
   }
 
-  // Clean and format project items
+  // Clean and format project items (Preserve exact projects from original resume)
   const projectBlocks = [];
   if (sections.projects.length > 0) {
     let currentBlock = [];
@@ -500,6 +548,11 @@ ${educationContent}
 }
 
 // Endpoint: AI Resume Optimizer & Rewriter
+// STRICT FACTUAL CONSTRAINT: ATS resume editor, NOT a resume writer.
+// ONLY rewrite and polish existing experiences, projects, and education listed in EXACT_ORIGINAL_RESUME.
+// DO NOT create fake job titles, DO NOT invent fake company names (e.g. Nexus Systems),
+// DO NOT add fictional date ranges, and DO NOT add fictional projects.
+// If the user has 1 job in the original text, the rewritten version must have EXACTLY 1 job under WORK EXPERIENCE.
 app.post("/api/rewrite-resume", (req, res) => {
   try {
     const { 
@@ -510,10 +563,16 @@ app.post("/api/rewrite-resume", (req, res) => {
       candidateName = "" 
     } = req.body;
 
-    // Use originalText or resumeText from payload
-    const sourceText = originalText || resumeText || "";
+    // Use originalText or resumeText from payload as EXACT_ORIGINAL_RESUME
+    const EXACT_ORIGINAL_RESUME = originalText || resumeText || "";
 
-    const result = optimizeAtsResume(sourceText, targetRole, missingSkills, candidateName);
+    if (!EXACT_ORIGINAL_RESUME || EXACT_ORIGINAL_RESUME.trim().length < 20) {
+      return res.status(400).json({
+        error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
+      });
+    }
+
+    const result = optimizeAtsResume(EXACT_ORIGINAL_RESUME, targetRole, missingSkills, candidateName);
 
     res.json({
       success: true,
