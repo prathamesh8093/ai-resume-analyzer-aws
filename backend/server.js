@@ -18,28 +18,89 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// Fallback text extraction using raw PDF stream decoding & regex sanitization
+function fallbackExtractTextFromPdfBuffer(buffer) {
+  try {
+    const rawString = buffer.toString("binary");
+    // Look for text chunks enclosed in parentheses or stream text operators
+    const textMatches = [];
+    const streamRegex = /\(([^)]+)\)\s*T[jJ]/g;
+    let match;
+    while ((match = streamRegex.exec(rawString)) !== null) {
+      if (match[1] && match[1].trim()) {
+        textMatches.push(match[1].trim());
+      }
+    }
+
+    if (textMatches.length > 5) {
+      return textMatches.join(" ").replace(/\\([()\\])/g, "$1").replace(/\s+/g, " ");
+    }
+
+    // Secondary fallback: Extract readable ASCII word sequences from streams
+    const asciiMatches = rawString.match(/[A-Za-z0-9,.:;@\-_/+=#*()]{3,}(?:\s+[A-Za-z0-9,.:;@\-_/+=#*()]{2,}){2,}/g);
+    if (asciiMatches && asciiMatches.length > 0) {
+      return asciiMatches.join("\n").replace(/\s+/g, " ");
+    }
+  } catch (err) {
+    console.warn("Fallback raw stream extraction warning:", err.message);
+  }
+  return "";
+}
+
 // Endpoint: Extract Real Text from Uploaded PDF Buffer
 app.post("/api/extract-text", upload.single("resume"), async (req, res) => {
   try {
-    let pdfBuffer = null;
+    let fileBuffer = null;
 
     if (req.file && req.file.buffer) {
-      pdfBuffer = req.file.buffer;
+      fileBuffer = Buffer.isBuffer(req.file.buffer)
+        ? req.file.buffer
+        : Buffer.from(req.file.buffer);
     } else if (req.body && req.body.base64) {
-      pdfBuffer = Buffer.from(req.body.base64, "base64");
+      // Remove any data URL prefix if present (e.g. data:application/pdf;base64,)
+      const cleanBase64 = req.body.base64.replace(/^data:[^;]+;base64,/, "");
+      fileBuffer = Buffer.from(cleanBase64, "base64");
+    } else if (req.body && req.body.buffer) {
+      fileBuffer = Buffer.from(req.body.buffer);
     }
 
-    if (!pdfBuffer || pdfBuffer.length === 0) {
+    if (!fileBuffer || fileBuffer.length === 0) {
+      console.warn("No valid PDF buffer received in request.");
       return res.status(400).json({
         error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
       });
     }
 
-    const data = await pdfParse(pdfBuffer);
-    const extractedText = (data && data.text) ? data.text.trim() : "";
+    let extractedText = "";
+    let numPages = 1;
+
+    try {
+      // Standard pdf-parse execution using standard Buffer input
+      const pdfData = await pdfParse(fileBuffer);
+      if (pdfData && pdfData.text) {
+        extractedText = pdfData.text.trim();
+        numPages = pdfData.numpages || 1;
+      }
+    } catch (parseErr) {
+      console.warn("Standard pdf-parse threw error, attempting fallback stream parsing:", parseErr.message);
+    }
+
+    // Fallback extraction if standard pdfParse yielded empty or near-empty string
+    if (!extractedText || extractedText.length < 20) {
+      console.log("pdfParse yielded minimal text; initiating fallback stream extraction...");
+      const fallbackText = fallbackExtractTextFromPdfBuffer(fileBuffer);
+      if (fallbackText && fallbackText.length >= 20) {
+        extractedText = fallbackText;
+        console.log("Fallback text extraction succeeded with length:", fallbackText.length);
+      }
+    }
+
+    // Log diagnostic information
+    console.log("Extracted text length:", extractedText.length);
 
     // Require valid readable text extracted from the document
     if (!extractedText || extractedText.length < 20) {
+      console.warn("Extracted text length is below threshold (length:", extractedText.length, ")");
       return res.status(400).json({
         error: "Failed to extract text from PDF. Please upload a valid readable text PDF."
       });
@@ -48,7 +109,7 @@ app.post("/api/extract-text", upload.single("resume"), async (req, res) => {
     res.json({
       success: true,
       text: extractedText,
-      numPages: data.numpages || 1
+      numPages
     });
   } catch (error) {
     console.error("PDF extraction error:", error);
@@ -404,9 +465,19 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
 
   let currentSection = "summary";
 
+  // Helper: Detect if a line is an objective or career goal statement
+  function isObjectiveStatement(text) {
+    const lower = text.toLowerCase();
+    return /^(seeking|passionate|motivated|aspiring|looking for|objective|enthusiastic|dedicated|eager to)\b/i.test(lower) ||
+      /\b(seeking an? (entry-level|internship|role|position)|looking (for|to join)|aiming to secure)\b/i.test(lower);
+  }
+
   for (const line of bodyLines) {
     const lower = line.toLowerCase();
-    if (/^(professional\s+)?(summary|profile|about\s*me|objective)\b/i.test(lower)) {
+    if (/^(professional\s+)?(summary|profile|about\s*me|career\s+summary)\b/i.test(lower)) {
+      currentSection = "summary";
+      continue;
+    } else if (/^objective\b/i.test(lower)) {
       currentSection = "summary";
       continue;
     } else if (/^(technical\s+)?(skills|technologies|core\s+competencies|tools\s*(&|and)?\s*frameworks)\b/i.test(lower)) {
@@ -415,7 +486,7 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
     } else if (/^(work\s+)?(experience|employment|work\s+history|professional\s+experience)\b/i.test(lower)) {
       currentSection = "experience";
       continue;
-    } else if (/^(projects|academic\s+projects|personal\s+projects|key\s+projects)\b/i.test(lower)) {
+    } else if (/^(academic\s+experience(\s*(&|and)\s*projects)?|projects|academic\s+projects|personal\s+projects|key\s+projects)\b/i.test(lower)) {
       currentSection = "projects";
       continue;
     } else if (/^(education|academic\s+background|degrees|certifications|qualifications)\b/i.test(lower)) {
@@ -423,38 +494,82 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
       continue;
     }
 
+    // Check if line in experience is actually an objective statement
+    if (currentSection === "experience" && isObjectiveStatement(line)) {
+      sections.summary.push(line);
+      continue;
+    }
+
     sections[currentSection].push(line);
   }
 
-  // If candidate summary is empty or minimal, build a truthful factual summary
-  let summaryText = "";
-  if (sections.summary.length > 0) {
-    summaryText = sections.summary.join(" ").replace(/\s+/g, " ");
-  } else {
-    summaryText = `Performance-driven professional with hands-on background demonstrated through documented projects and experience, targeting ${targetRole} positions. Proven expertise in solving engineering problems, delivering maintainable solutions, and contributing to technical excellence.`;
+  // Filter out any objective lines that may have leaked into other sections
+  for (let sKey of ["experience", "projects", "skills"]) {
+    const filtered = [];
+    for (const item of sections[sKey]) {
+      if (isObjectiveStatement(item)) {
+        sections.summary.push(item);
+      } else {
+        filtered.push(item);
+      }
+    }
+    sections[sKey] = filtered;
+  }
+
+  // Helper: Detect if a line looks like a structured job header (Role | Company | Dates)
+  function isJobHeaderLine(line) {
+    const hasDate = /\b(19\d\d|20\d\d|present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(line);
+    const hasSeparator = /[|–—\-@]/.test(line);
+    const hasJobKeyword = /\b(engineer|developer|intern|lead|associate|analyst|specialist|manager|consultant|architect|administrator|programmer|designer)\b/i.test(line);
+    return (hasJobKeyword && (hasSeparator || hasDate)) || (hasSeparator && hasDate);
+  }
+
+  // Helper: Detect if a line looks like a project header
+  function isProjectHeaderLine(line) {
+    return /^(project|capstone|portfolio|web\s+app|application|system|pipeline|engine|bot|tool)\b/i.test(line) ||
+      /\b(project|capstone)\b/i.test(line) ||
+      (line.length < 60 && !line.startsWith("-") && !line.startsWith("*") && /[|–—\-]/.test(line));
   }
 
   // Clean and format experience items (Strict Fact Preservation: Only upgrade existing bullet verbs, preserving exact jobs)
   const experienceBlocks = [];
+  const validStructuredJobs = [];
+
   if (sections.experience.length > 0) {
-    let currentBlock = [];
+    let currentJob = { header: "", bullets: [] };
     for (const expLine of sections.experience) {
       const isBullet = /^[-*•·–—]|\d+\.\s+/.test(expLine);
       if (isBullet) {
         const cleanBullet = expLine.replace(/^[-*•·–—]|\d+\.\s+/, "").trim();
         const upgraded = upgradeBulletPoint(cleanBullet);
-        currentBlock.push(`- ${upgraded}`);
+        currentJob.bullets.push(`- ${upgraded}`);
       } else {
-        // Line representing role / company / dates: start a new job block if bullets were previously accumulated
-        if (currentBlock.length > 0) {
-          experienceBlocks.push(currentBlock.join("\n"));
-          currentBlock = [];
+        // Line representing role / company / dates
+        if (currentJob.header || currentJob.bullets.length > 0) {
+          validStructuredJobs.push(currentJob);
+          currentJob = { header: "", bullets: [] };
         }
-        currentBlock.push(expLine);
+        currentJob.header = expLine;
       }
     }
-    if (currentBlock.length > 0) {
-      experienceBlocks.push(currentBlock.join("\n"));
+    if (currentJob.header || currentJob.bullets.length > 0) {
+      validStructuredJobs.push(currentJob);
+    }
+
+    // Verify structured jobs: each job must have either a header or bullets, and not be pure academic projects
+    for (const job of validStructuredJobs) {
+      const headerStr = job.header ? job.header.trim() : "";
+      const isAcademic = /academic\s+project|coursework|university\s+project|b\.?s\.?|bachelor|student/i.test(headerStr);
+      if (isAcademic) {
+        // Route academic projects to projects section
+        if (headerStr) sections.projects.push(headerStr);
+        sections.projects.push(...job.bullets);
+      } else if (headerStr || job.bullets.length > 0) {
+        const block = headerStr 
+          ? (job.bullets.length > 0 ? `${headerStr}\n${job.bullets.join("\n")}` : headerStr)
+          : job.bullets.join("\n");
+        experienceBlocks.push(block);
+      }
     }
   }
 
@@ -479,6 +594,14 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
     if (currentBlock.length > 0) {
       projectBlocks.push(currentBlock.join("\n"));
     }
+  }
+
+  // If candidate summary has text or objective statements, format cleanly
+  let summaryText = "";
+  if (sections.summary.length > 0) {
+    summaryText = sections.summary.join(" ").replace(/\s+/g, " ");
+  } else {
+    summaryText = `Performance-driven professional with hands-on background demonstrated through documented projects and experience, targeting ${targetRole} positions. Proven expertise in solving engineering problems, delivering maintainable solutions, and contributing to technical excellence.`;
   }
 
   // Format Skills: retain all original skills truthful to the resume, and append target keywords cleanly
@@ -514,25 +637,51 @@ Dedicated professional pursuing opportunities as ${targetRole}. Skilled in lever
     ? `[${contactLines.join(" | ")}]` 
     : "[Contact Information: Email | Phone | LinkedIn | GitHub]";
 
-  // Construct Markdown and Plaintext
-  const formattedMarkdown = `# ${displayName.toUpperCase()}
-${contactHeader}
+  // Build Sections cleanly
+  const markdownParts = [
+    `# ${displayName.toUpperCase()}`,
+    contactHeader,
+    "",
+    "## PROFESSIONAL SUMMARY",
+    summaryText,
+    "",
+    "## TECHNICAL SKILLS",
+    formattedSkillsSection
+  ];
 
-## PROFESSIONAL SUMMARY
-${summaryText}
+  // Only include WORK EXPERIENCE if candidate has real structured corporate/internship work history
+  if (experienceBlocks.length > 0) {
+    markdownParts.push(
+      "",
+      "## WORK EXPERIENCE",
+      experienceBlocks.join("\n\n")
+    );
+  } else if (projectBlocks.length > 0) {
+    // If no corporate work experience exists, use ACADEMIC EXPERIENCE & PROJECTS
+    markdownParts.push(
+      "",
+      "## ACADEMIC EXPERIENCE & PROJECTS",
+      projectBlocks.join("\n\n")
+    );
+  }
 
-## TECHNICAL SKILLS
-${formattedSkillsSection}
+  // Include standalone PROJECTS if WORK EXPERIENCE was present and projects exist
+  if (experienceBlocks.length > 0 && projectBlocks.length > 0) {
+    markdownParts.push(
+      "",
+      "## PROJECTS",
+      projectBlocks.join("\n\n")
+    );
+  }
 
-## WORK EXPERIENCE
-${experienceBlocks.length > 0 ? experienceBlocks.join("\n\n") : "- Professional experience as detailed in verified candidate records."}
+  markdownParts.push(
+    "",
+    "## EDUCATION",
+    educationContent,
+    ""
+  );
 
-## PROJECTS
-${projectBlocks.length > 0 ? projectBlocks.join("\n\n") : "- Technical and engineering projects as detailed in verified candidate records."}
-
-## EDUCATION
-${educationContent}
-`;
+  const formattedMarkdown = markdownParts.join("\n");
 
   return {
     rewrittenText: formattedMarkdown,

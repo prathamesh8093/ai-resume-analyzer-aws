@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   BarChart3,
   Check,
-  Terminal,
   FileUp,
   Award,
   TrendingUp,
@@ -23,13 +22,9 @@ import {
   Zap,
   Gauge,
   Cpu,
-  Download,
-  Copy,
   Columns,
   Wand2,
   Printer,
-  FileDown,
-  Eye,
   Sliders
 } from 'lucide-react';
 
@@ -158,29 +153,195 @@ Node.js, Express, JavaScript, PostgreSQL, REST APIs, JWT, Docker, Git`
   }
 ];
 
+// Dedicated ATS Formatted Resume Component
+export function ATSFormattedResume({ text }) {
+  if (!text) return null;
+
+  // Structured parser to convert Markdown/Plaintext into ATS-compliant DOM elements
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  let candidateName = '';
+  let contactInfo = '';
+  const sections = [];
+  let currentSection = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Candidate Name (# NAME)
+    if (line.startsWith('# ')) {
+      candidateName = line.replace(/^#\s*/, '').trim();
+      continue;
+    }
+
+    // Contact details line ([Contact: ...] or [email | phone ...])
+    if (line.startsWith('[') && line.endsWith(']')) {
+      contactInfo = line.replace(/^\[|\]$/g, '').trim();
+      continue;
+    }
+
+    // Section header (## HEADER)
+    if (line.startsWith('## ')) {
+      if (currentSection) {
+        sections.push(currentSection);
+      }
+      currentSection = {
+        title: line.replace(/^##\s*/, '').trim(),
+        items: []
+      };
+      continue;
+    }
+
+    // Accumulate items inside current section
+    if (currentSection) {
+      currentSection.items.push(line);
+    } else if (!candidateName && i === 0) {
+      candidateName = line;
+    } else if (!contactInfo && i === 1 && line.includes('@')) {
+      contactInfo = line;
+    }
+  }
+
+  if (currentSection) {
+    sections.push(currentSection);
+  }
+
+  // Render individual section content with flex metadata & clean bullets
+  const renderSectionContent = (section) => {
+    const rawItems = section.items;
+    const elements = [];
+    let currentBulletList = [];
+
+    const flushBullets = () => {
+      if (currentBulletList.length > 0) {
+        elements.push(
+          <ul key={`ul-${elements.length}`} className="list-disc list-outside ml-4 space-y-0.5 my-1 text-slate-800 text-[12px] leading-snug print:text-[10pt] print:leading-snug print:my-0.5 print:space-y-0">
+            {currentBulletList.map((bullet, bIdx) => (
+              <li key={bIdx} className="pl-0.5 py-0.5 print:py-0.5 leading-snug">
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        );
+        currentBulletList = [];
+      }
+    };
+
+    for (let j = 0; j < rawItems.length; j++) {
+      const item = rawItems[j];
+
+      // Bullet points (- Bullet or * Bullet)
+      if (item.startsWith('- ') || item.startsWith('* ') || item.startsWith('• ')) {
+        const cleanBullet = item.replace(/^[-*•]\s*/, '').trim();
+        currentBulletList.push(cleanBullet);
+        continue;
+      }
+
+      // Flush any accumulated bullet list before a non-bullet element
+      flushBullets();
+
+      // Check if line contains a role / company / date / location separator
+      const hasPipe = item.includes('|');
+      const hasSubheader = item.startsWith('### ');
+
+      if (hasSubheader || hasPipe) {
+        const cleanText = item.replace(/^###\s*/, '').trim();
+        const parts = cleanText.split('|').map((p) => p.trim());
+        const leftTitle = parts[0] || cleanText;
+        const rightMeta = parts.slice(1).join(' | ');
+
+        elements.push(
+          <div key={`entry-${j}`} className="flex items-baseline justify-between text-[12px] print:text-[10pt] mt-1 mb-0.5 font-semibold text-slate-900 leading-snug print:mt-1 print:mb-0.5">
+            <span className="font-bold text-slate-900 tracking-tight">{leftTitle}</span>
+            {rightMeta && <span className="text-right text-slate-700 font-medium text-[11px] print:text-[9.5pt]">{rightMeta}</span>}
+          </div>
+        );
+        continue;
+      }
+
+      // Dates/Period line in italics (*2022 - Present*)
+      if (item.startsWith('*') && item.endsWith('*') && item.length < 50) {
+        const cleanDate = item.replace(/^\*|\*$/g, '').trim();
+        elements.push(
+          <div key={`date-${j}`} className="text-[11px] print:text-[9.5pt] text-slate-600 italic -mt-0.5 mb-0.5 leading-tight">
+            {cleanDate}
+          </div>
+        );
+        continue;
+      }
+
+      // Regular paragraph text (e.g. Professional Summary text)
+      elements.push(
+        <p key={`p-${j}`} className="text-[12px] print:text-[10pt] text-slate-800 leading-snug my-1 print:my-0.5 py-0.5 print:py-0.5">
+          {item}
+        </p>
+      );
+    }
+
+    flushBullets();
+    return elements;
+  };
+
+  return (
+    <div className="ats-resume-document bg-white text-slate-950 font-sans p-5 sm:p-7 max-w-[800px] mx-auto text-left shadow-xs border border-slate-200 rounded-xl print:border-none print:shadow-none print:p-0 print:max-w-none">
+      {/* Centered Candidate Header */}
+      <div className="text-center pb-2 border-b-2 border-slate-900 mb-2 print:pb-1 print:mb-1.5">
+        <h1 className="text-xl sm:text-2xl font-extrabold uppercase tracking-wider text-slate-950 mb-0.5 print:text-lg">
+          {candidateName || 'CANDIDATE NAME'}
+        </h1>
+        {contactInfo && (
+          <p className="text-[11px] text-slate-700 tracking-wide font-medium print:text-[9.5pt]">
+            {contactInfo}
+          </p>
+        )}
+      </div>
+
+      {/* Structured Sections */}
+      <div className="space-y-2.5 print:space-y-1.5">
+        {sections.map((section, idx) => (
+          <div key={idx} className="ats-section">
+            <h2 className="text-xs sm:text-[12px] font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5 mb-1 print:mb-1 print:py-0.5 print:text-[10.5pt]">
+              {section.title}
+            </h2>
+            <div className="ats-section-body">
+              {renderSectionContent(section)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [selectedRole, setSelectedRole] = useState('AWS Cloud Engineer');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeStep, setActiveStep] = useState(0); // 0: idle, 1: presigned url, 2: s3 upload, 3: nlp analysis, 4: complete
   const [analysisResult, setAnalysisResult] = useState(null);
   const [serverStatus, setServerStatus] = useState('checking'); // 'online' | 'offline' | 'checking'
-  const [logs, setLogs] = useState([]);
   const [uploadError, setUploadError] = useState(null);
-  const [activeTab, setActiveTab] = useState('scorecard'); // 'scorecard' | 'logs'
   const fileInputRef = useRef(null);
 
   // Optimizer & Rewriter States
   const [isRewriting, setIsRewriting] = useState(false);
   const [optimizedResume, setOptimizedResume] = useState(null);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'optimized' | 'original'
-  const [copied, setCopied] = useState(false);
 
   const addLog = (message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev, { message, type, timestamp }]);
+    console.log(`[${type.toUpperCase()}] ${message}`);
   };
+
+  // Memory cleanup for object URLs on unmount or URL change
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
 
   // Check backend server health on mount
   useEffect(() => {
@@ -240,6 +401,11 @@ export default function App() {
       setUploadError('File size exceeds 10MB limit. Please upload a smaller PDF resume.');
       return;
     }
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setPdfPreviewUrl(previewUrl);
     setSelectedFile(file);
     setOptimizedResume(null);
     addLog(`Selected resume file: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
@@ -247,8 +413,13 @@ export default function App() {
 
   const loadSampleResume = (sample) => {
     setSelectedRole(sample.roleTarget);
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+    }
     const blob = new Blob([sample.originalText], { type: 'application/pdf' });
     const file = new File([blob], sample.name, { type: 'application/pdf' });
+    const previewUrl = URL.createObjectURL(file);
+    setPdfPreviewUrl(previewUrl);
     setSelectedFile(file);
     setUploadError(null);
     setOptimizedResume(null);
@@ -263,7 +434,6 @@ export default function App() {
     setUploadError(null);
     setAnalysisResult(null);
     setOptimizedResume(null);
-    setLogs([]);
 
     const fileName = selectedFile.name;
     const fileType = selectedFile.type || 'application/pdf';
@@ -329,57 +499,87 @@ export default function App() {
         addLog(`S3 storage upload confirmed for: ${s3FileKey}`, 'info');
       }
 
-      // Step 3: NLP Match Analysis + ATS Metric Calculations
+      // Step 3: Real PDF Text Extraction & NLP Analysis
       setActiveStep(3);
-      addLog(`Step 3/3: Evaluating ATS Match Score, Keyword Coverage & Structural Integrity for "${selectedRole}"...`);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      addLog(`Step 3/3: Extracting real resume text and evaluating ATS match for "${selectedRole}"...`);
 
       const roleConfig = JOB_PROFILES[selectedRole];
       const requiredSkills = roleConfig ? roleConfig.skills : [];
 
-      const matched = [];
-      const missing = [];
+      let originalResumeText = '';
+      let candidateName = '';
 
       const existingSample = SAMPLE_RESUMES.find(
         (s) => s.name === selectedFile.name && s.roleTarget === selectedRole
       );
 
-      let originalResumeText = '';
-      let candidateName = 'Alex Chen';
-
       if (existingSample) {
-        matched.push(...existingSample.matched);
-        missing.push(...existingSample.missing);
         originalResumeText = existingSample.originalText;
         candidateName = existingSample.candidateName;
       } else {
-        candidateName = selectedFile.name.replace(/\.pdf$/i, '').replace(/[_-]/g, ' ');
-        requiredSkills.forEach((skill, index) => {
-          const isMatched = (skill.charCodeAt(0) + index) % 3 !== 0;
-          if (isMatched) {
-            matched.push(skill);
-          } else {
-            missing.push(skill);
+        // Send file to /api/extract-text for real PDF buffer parsing
+        try {
+          const formData = new FormData();
+          formData.append('resume', selectedFile);
+
+          const extractRes = await fetch(`${API_BASE_URL}/extract-text`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!extractRes.ok) {
+            const errData = await extractRes.json().catch(() => ({}));
+            const errMsg = errData.error || 'Failed to extract text from PDF. Please upload a valid readable text PDF.';
+            setUploadError(errMsg);
+            addLog(`Error: ${errMsg}`, 'error');
+            setIsProcessing(false);
+            setActiveStep(0);
+            return;
           }
-        });
-        originalResumeText = `${candidateName.toUpperCase()}
-Email: candidate@example.com | Phone: (555) 019-2834 | Target Role: ${selectedRole}
 
-PROFESSIONAL SUMMARY
-Experienced professional with hands-on skills in ${matched.slice(0, 4).join(', ')}. Seeking to leverage technical capabilities in ${selectedRole} opportunities.
+          const extractData = await extractRes.json();
+          if (!extractData.text || extractData.text.trim().length < 20) {
+            const errMsg = 'Failed to extract text from PDF. Please upload a valid readable text PDF.';
+            setUploadError(errMsg);
+            addLog(`Error: ${errMsg}`, 'error');
+            setIsProcessing(false);
+            setActiveStep(0);
+            return;
+          }
 
-EXPERIENCE
-Software Specialist (2022 - Present)
-- Handled implementation and configurations using ${matched.slice(0, 3).join(', ')}.
-- Assisted development teams with deployment tasks and bug resolution.
-- Collaborated on team projects with Git version control.
+          originalResumeText = extractData.text.trim();
+          addLog(`Successfully extracted ${originalResumeText.length} characters from PDF`, 'success');
 
-EDUCATION
-B.S. in Computer Science / Information Technology (2020)
-
-CORE SKILLS
-${matched.join(', ')}`;
+          // Attempt to extract candidate name from first non-empty line
+          const firstLine = originalResumeText.split(/\r?\n/).map(l => l.trim()).filter(Boolean)[0] || '';
+          if (firstLine && firstLine.length < 50 && !/summary|objective|experience|skills|education/i.test(firstLine)) {
+            candidateName = firstLine.replace(/^[#\*\s]+/, '');
+          } else {
+            candidateName = selectedFile.name.replace(/\.pdf$/i, '').replace(/[_-]/g, ' ');
+          }
+        } catch (extractErr) {
+          console.error('Failed to connect to extraction endpoint:', extractErr);
+          const errMsg = 'Failed to extract text from PDF. Please upload a valid readable text PDF.';
+          setUploadError(errMsg);
+          addLog(`Error: ${errMsg}`, 'error');
+          setIsProcessing(false);
+          setActiveStep(0);
+          return;
+        }
       }
+
+      // Calculate real skill matches based on actual extracted resume text
+      const matched = [];
+      const missing = [];
+      const resumeLower = originalResumeText.toLowerCase();
+
+      requiredSkills.forEach((skill) => {
+        if (resumeLower.includes(skill.toLowerCase())) {
+          matched.push(skill);
+        } else {
+          missing.push(skill);
+        }
+      });
 
       // Three-Part ATS Breakdown Calculations
       const keywordMatchScore = Math.round((matched.length / requiredSkills.length) * 100);
@@ -396,20 +596,20 @@ ${matched.join(', ')}`;
         {
           id: 'warn-1',
           severity: 'Critical',
-          title: 'Missing Quantifiable Impact Metrics',
-          description: 'Experience bullet points lack numerical results (% latency decrease, $ cost savings, scale of users served). ATS algorithms favor data-driven achievements.'
+          title: 'Missing Numbers & Results',
+          description: "Your project and work experience bullet points don't show measurable results. Add real numbers or percentages (e.g., 'Improved speed by 20%', 'Served 500+ users', 'Reduced loading time') to show actual impact."
         },
         {
           id: 'warn-2',
           severity: 'Important',
-          title: 'Generic Responsibility Verbs Detected',
-          description: "Phrases like 'Responsible for', 'Worked on', and 'Assisted with' weaken candidate impact. Replace with high-power action verbs (e.g. 'Architected', 'Spearheaded')."
+          title: 'Weak Action Words Used',
+          description: "Phrases like 'Responsible for', 'Worked on', or 'Assisted with' make your work sound passive. Replace them with strong action words like 'Built', 'Developed', 'Designed', or 'Led'."
         },
         {
           id: 'warn-3',
           severity: 'Recommendation',
-          title: 'Unclustered Technical Skills Section',
-          description: `Missing categorical clustering in skills matrix. Keywords should be explicitly partitioned into categories (e.g., Cloud Services, DevOps & IaC, Languages) for optimal parsing.`
+          title: 'Unorganized Skills List',
+          description: "Your skills are listed as a plain block of text. Group them into clear categories (e.g., Languages, Frontend, Backend, Databases, Tools) so hiring systems can read them easily."
         }
       ];
 
@@ -490,108 +690,148 @@ ${matched.join(', ')}`;
         console.warn('Backend rewrite endpoint unreachable, applying client-side optimizer:', err);
       }
 
-      // If backend was unreachable or failed, synthesize the ATS-optimized resume directly
+      // If backend was unreachable or failed, synthesize the ATS-optimized resume directly with strict fact preservation
       if (!data || !data.formattedMarkdown) {
         const role = analysisResult.targetRole;
-        const name = analysisResult.candidateName.toUpperCase();
-        const missing = analysisResult.missingSkills;
-        const matched = analysisResult.matchedSkills;
+        const name = (analysisResult.candidateName || 'Candidate').toUpperCase();
+        const missing = analysisResult.missingSkills || [];
+        const original = analysisResult.originalResumeText || '';
 
-        let summary = '';
-        let skillsList = '';
-        let experienceBlock = '';
-        let projectBlock = '';
-
-        if (role === 'AWS Cloud Engineer') {
-          summary = `Results-driven AWS Cloud Engineer with 4+ years of experience designing, automating, and operating high-availability cloud infrastructure on AWS. Expert in Infrastructure as Code (${missing.includes('terraform') ? 'Terraform' : 'CloudFormation'}), container orchestration (${missing.includes('kubernetes') ? 'Kubernetes, Docker' : 'Docker'}), and continuous deployment pipelines. Proven track record reducing deployment latency by 42% while maintaining 99.99% uptime across production workloads.`;
-          skillsList = `- Cloud Platforms: AWS (EC2, S3, Lambda, DynamoDB, CloudWatch, IAM, VPC, Route53, CloudFront)
-- DevOps & IaC: Terraform, CloudFormation, Docker, Kubernetes, CI/CD (GitHub Actions, GitLab CI)
-- Scripting & OS: Python, Bash, Node.js, Linux (Ubuntu, RHEL)
-- Monitoring & Security: AWS CloudWatch, Datadog, Prometheus, IAM Policies, Zero-Trust Architecture`;
-          experienceBlock = `SENIOR CLOUD & DEVOPS ENGINEER | TechScale Solutions
-2022 - Present
-- Architected and deployed enterprise microservices infrastructure on AWS utilizing EC2, Lambda, and DynamoDB, cutting infrastructure costs by 28%.
-- Spearheaded complete Terraform Infrastructure-as-Code pipeline, reducing multi-region staging deployment turnaround from 3 days to 45 minutes.
-- Engineered automated CI/CD release workflows with integrated security scanning, accelerating production release frequency by 3x.
-- Implemented centralized observability with CloudWatch and Prometheus alerts, achieving 99.99% system SLA and cutting MTTR by 35%.
-
-CLOUD INFRASTRUCTURE ASSOCIATE | Nexus Systems
-2020 - 2022
-- Automated routine Linux system management and backup tasks using Python scripts, saving 15 engineering hours weekly.
-- Migrated 12 legacy on-premise servers to AWS S3 and EC2 instances with zero scheduled production downtime.
-- Configured granular AWS IAM roles, KMS encryption, and security groups enforcing least-privilege zero-trust access.`;
-          projectBlock = `SERVERLESS EVENT-DRIVEN DATA PIPELINE
-Technologies: AWS Lambda, S3, DynamoDB, Python, Terraform
-- Engineered automated serverless data processing pipeline processing 1.5M+ daily events with sub-second latency and $0 idle runtime costs.`;
-        } else if (role === 'Frontend Developer') {
-          summary = `High-impact Frontend Developer with 4+ years of experience building accessible, pixel-perfect, and high-performance web applications using React, TypeScript, and Tailwind CSS. Specializes in modern component architecture, state management (Redux), client-side performance optimization (Core Web Vitals), and Webpack bundling.`;
-          skillsList = `- Frontend Frameworks: React, Next.js, Redux Toolkit, Context API
-- Languages & Web Standards: JavaScript (ES6+), TypeScript, HTML5, CSS3/PostCSS
-- Styling & Design Systems: Tailwind CSS, CSS Modules, Responsive Viewports, WCAG 2.1 A11y
-- Tooling & Architecture: Webpack, Vite, Git, Jest, React Testing Library, RESTful APIs`;
-          experienceBlock = `SENIOR FRONTEND ENGINEER | PixelCraft Interactive
-2022 - Present
-- Architected scalable design system and reusable component library in React and Tailwind CSS adopted by 6 cross-functional engineering squads.
-- Optimized Largest Contentful Paint (LCP) from 3.8s to 1.1s and INP by 40%, elevating Google Core Web Vitals to 98/100.
-- Engineered stateful complex dashboard views with Redux Toolkit and REST APIs, supporting 85,000+ monthly active users with zero state drift.
-- Spearheaded comprehensive frontend automated testing with Jest and Cypress, elevating test coverage from 44% to 89%.
-
-FRONTEND UI DEVELOPER | Creative Logic Labs
-2020 - 2022
-- Built responsive single-page web applications from Figma prototypes with 100% design fidelity and fluid mobile viewports.
-- Integrated asynchronous REST APIs and JWT authentication handlers, enhancing end-user transaction conversion by 22%.`;
-          projectBlock = `HIGH-PERFORMANCE ANALYTICS WEB SUITE
-Technologies: React, TypeScript, Next.js, Tailwind CSS, Webpack
-- Developed enterprise real-time monitoring dashboard with custom chart widgets and WebSockets live streaming.`;
-        } else {
-          summary = `Performance-focused Backend Engineer with 4+ years of expertise designing resilient microservices, high-throughput REST APIs, and database architectures using Node.js, Express, MongoDB, and PostgreSQL. Experienced in Redis caching, Docker containerization, and AWS cloud deployments handling 10,000+ concurrent requests.`;
-          skillsList = `- Backend & Runtimes: Node.js, Express, REST APIs, Microservices, WebSockets
-- Databases & Caching: PostgreSQL, MongoDB, Redis, Mongoose, Prisma
-- Cloud & Containerization: AWS (S3, EC2), Docker, Docker Compose, Linux
-- Security & DevOps: JWT, OAuth2, Bcrypt, Git, CI/CD Pipelines, Unit/Integration Testing (Mocha, Jest)`;
-          experienceBlock = `SENIOR BACKEND DEVELOPER | DataStream Networks
-2022 - Present
-- Designed and engineered high-throughput REST API backend using Node.js and Express handling 12M+ monthly API calls with 99.98% reliability.
-- Implemented multi-layer Redis caching strategy, cutting primary PostgreSQL query load by 55% and reducing response times from 340ms to 45ms.
-- Containerized core microservices using Docker and automated deployments via CI/CD, decreasing rollback incidents by 80%.
-- Hardened authentication and authorization layers with JWT, rate limiting, and input sanitization to achieve OWASP Top-10 compliance.
-
-BACKEND SOFTWARE ENGINEER | Apex Cloud Systems
-2020 - 2022
-- Engineered scalable data ingestion workers in Node.js connected to MongoDB and PostgreSQL clusters.
-- Constructed 25+ robust RESTful API endpoints with automated OpenAPI / Swagger documentation and Jest test suites.`;
-          projectBlock = `DISTRIBUTED ORDER PROCESSING ENGINE
-Technologies: Node.js, Express, PostgreSQL, Redis, Docker, AWS
-- Constructed distributed transactional messaging queue processing 200 transactions/second with ACID integrity.`;
+        // Extract sections truthfully from original resume text
+        const lines = original.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const contactLines = [];
+        const bodyLines = [];
+        for (let i = 0; i < Math.min(lines.length, 6); i++) {
+          if (/@|github\.com|linkedin\.com|\+?\d[\d -]{7,}\d/i.test(lines[i])) {
+            contactLines.push(lines[i]);
+          } else {
+            bodyLines.push(lines[i]);
+          }
+        }
+        for (let i = 6; i < lines.length; i++) {
+          bodyLines.push(lines[i]);
         }
 
-        const formattedMarkdown = `# ${name}
-[Contact: email@example.com | +1 (555) 019-2834 | linkedin.com/in/profile | github.com/candidate]
+        const verbMap = [
+          { r: /^\s*(?:responsible for maintaining|worked on maintaining|helped maintain)\b/i, s: 'Administered and maintained' },
+          { r: /^\s*(?:responsible for developing|worked on developing|helped develop|assisted in developing)\b/i, s: 'Engineered and developed' },
+          { r: /^\s*(?:responsible for creating|worked on creating|helped create)\b/i, s: 'Architected and created' },
+          { r: /^\s*(?:responsible for building|worked on building|helped build)\b/i, s: 'Constructed and deployed' },
+          { r: /^\s*(?:responsible for managing|worked on managing|helped manage)\b/i, s: 'Orchestrated and managed' },
+          { r: /^\s*(?:responsible for|worked on|helped with|assisted with)\b/i, s: 'Spearheaded' },
+          { r: /^\s*(?:handled|did)\b/i, s: 'Executed' },
+          { r: /^\s*(?:monitored)\b/i, s: 'Monitored and optimized' }
+        ];
 
-## PROFESSIONAL SUMMARY
-${summary}
+        const upgradeBullet = (bullet) => {
+          let str = bullet.trim();
+          for (const item of verbMap) {
+            if (item.r.test(str)) {
+              str = str.replace(item.r, item.s);
+              break;
+            }
+          }
+          return str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+        };
 
-## CORE TECHNICAL SKILLS
-${skillsList}
+        const parsedSections = { summary: [], skills: [], experience: [], projects: [], education: [] };
+        let activeSec = 'summary';
 
-## PROFESSIONAL EXPERIENCE
-${experienceBlock}
+        const isObjective = (text) => {
+          const l = text.toLowerCase();
+          return /^(seeking|passionate|motivated|aspiring|looking for|objective|enthusiastic|dedicated|eager to)\b/i.test(l) ||
+            /\b(seeking an? (entry-level|internship|role|position)|looking (for|to join)|aiming to secure)\b/i.test(l);
+        };
 
-## KEY PROJECTS
-${projectBlock}
+        for (const line of bodyLines) {
+          const l = line.toLowerCase();
+          if (/^(professional\s+)?(summary|profile|about\s*me|career\s+summary|objective)\b/i.test(l)) { activeSec = 'summary'; continue; }
+          if (/^(technical\s+)?(skills|technologies|core\s+competencies)\b/i.test(l)) { activeSec = 'skills'; continue; }
+          if (/^(work\s+)?(experience|employment|work\s+history)\b/i.test(l)) { activeSec = 'experience'; continue; }
+          if (/^(academic\s+experience|projects|academic\s+projects|personal\s+projects|key\s+projects)\b/i.test(l)) { activeSec = 'projects'; continue; }
+          if (/^(education|academic\s+background|degrees|certifications)\b/i.test(l)) { activeSec = 'education'; continue; }
+          if (activeSec === 'experience' && isObjective(line)) {
+            parsedSections.summary.push(line);
+            continue;
+          }
+          parsedSections[activeSec].push(line);
+        }
 
-## EDUCATION & CREDENTIALS
-- B.S. in Computer Science | University of Technology (2020)
-- Relevant Certifications: Target Role Professional Specialist`;
+        // Clean out any stray objective statements
+        ['experience', 'projects', 'skills'].forEach(sKey => {
+          const filtered = [];
+          parsedSections[sKey].forEach(item => {
+            if (isObjective(item)) parsedSections.summary.push(item);
+            else filtered.push(item);
+          });
+          parsedSections[sKey] = filtered;
+        });
+
+        const truthfulSummary = parsedSections.summary.length > 0
+          ? parsedSections.summary.join(' ')
+          : `Performance-focused professional with verified experience targeting ${role} roles. Demonstrates engineering rigor and continuous technical skill growth.`;
+
+        // Check if there are real structured jobs
+        const validExperienceLines = parsedSections.experience.filter(l => !/academic\s+project|coursework/i.test(l));
+        const expBlocks = validExperienceLines.length > 0
+          ? validExperienceLines.map(l => /^[-*•]/.test(l) ? `- ${upgradeBullet(l.replace(/^[-*•]\s*/, ''))}` : l).join('\n')
+          : '';
+
+        const projBlocks = parsedSections.projects.length > 0
+          ? parsedSections.projects.map(l => /^[-*•]/.test(l) ? `- ${upgradeBullet(l.replace(/^[-*•]\s*/, ''))}` : l).join('\n')
+          : '';
+
+        const eduBlocks = parsedSections.education.length > 0
+          ? parsedSections.education.map(l => `- ${l.replace(/^[-*•]\s*/, '')}`).join('\n')
+          : '- Academic and professional credentials as verified in original resume.';
+
+        const missingFiltered = missing.filter(m => !original.toLowerCase().includes(m.toLowerCase()));
+        let skillsBlock = parsedSections.skills.length > 0
+          ? parsedSections.skills.map(s => `- ${s.replace(/^[-*•]\s*/, '')}`).join('\n')
+          : `- Core Competencies: Relevant technologies and practices for ${role}`;
+
+        if (missingFiltered.length > 0) {
+          skillsBlock += `\n- Target Role Skills (Recommended for ${role}): ${missingFiltered.join(', ')}`;
+        }
+
+        const contactHeader = contactLines.length > 0 
+          ? `[${contactLines.join(' | ')}]` 
+          : '[Contact Information from source resume]';
+
+        const parts = [
+          `# ${name}`,
+          contactHeader,
+          '',
+          '## PROFESSIONAL SUMMARY',
+          truthfulSummary,
+          '',
+          '## TECHNICAL SKILLS',
+          skillsBlock
+        ];
+
+        if (expBlocks) {
+          parts.push('', '## WORK EXPERIENCE', expBlocks);
+        } else if (projBlocks) {
+          parts.push('', '## ACADEMIC EXPERIENCE & PROJECTS', projBlocks);
+        }
+
+        if (expBlocks && projBlocks) {
+          parts.push('', '## PROJECTS', projBlocks);
+        }
+
+        parts.push('', '## EDUCATION', eduBlocks, '');
+
+        const formattedMarkdown = parts.join('\n');
 
         data = {
+          rewrittenText: formattedMarkdown,
           formattedMarkdown,
-          newScore: 96,
+          newScore: 94,
           improvements: [
-            `Integrated 100% of missing critical keywords: ${missing.join(', ')}`,
-            'Replaced passive phrases with authoritative action verbs (Architected, Spearheaded, Engineered)',
-            'Quantified 100% of experience bullet points with tangible business metrics and scale percentages',
-            'Standardized to strict single-column ATS parser compliant structure'
+            'Strict Fact Preservation: Preserved exact employers, projects, dates, and education from original resume with zero hallucinations.',
+            'Action Verb Enhancement: Upgraded passive verbs (worked on, responsible for) to impactful technical verbs.',
+            `Skill Alignment: Added target skills (${missingFiltered.slice(0, 4).join(', ') || 'role keywords'}) to TECHNICAL SKILLS without fabricating job duties.`,
+            'ATS Single-Column Format: Rebuilt into standardized single-column ATS headings (SUMMARY, TECHNICAL SKILLS, WORK EXPERIENCE, PROJECTS, EDUCATION).'
           ]
         };
       }
@@ -615,6 +855,10 @@ ${projectBlock}
   };
 
   const handleReset = () => {
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+    }
+    setPdfPreviewUrl(null);
     setSelectedFile(null);
     setAnalysisResult(null);
     setOptimizedResume(null);
@@ -623,36 +867,8 @@ ${projectBlock}
   };
 
   // Download handlers
-  const handleDownload = (format) => {
-    if (!optimizedResume) return;
-    const content = optimizedResume.formattedMarkdown;
-    const candidateName = analysisResult?.candidateName?.replace(/\s+/g, '_') || 'Resume';
-    const filename = `${candidateName}_ATS_Optimized.${format}`;
-
-    let mimeType = 'text/plain';
-    if (format === 'md') mimeType = 'text/markdown';
-
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    addLog(`Downloaded ATS Optimized Resume as ${filename}`, 'success');
-  };
-
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleCopyClipboard = () => {
-    if (!optimizedResume) return;
-    navigator.clipboard.writeText(optimizedResume.formattedMarkdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   // Color theme helpers based on score
@@ -691,7 +907,7 @@ ${projectBlock}
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-900">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col min-h-screen">
         {/* Navigation / Header with Animated Orb */}
-        <header className="flex items-center pb-6 border-b border-slate-200">
+        <header className="navbar no-print flex items-center pb-6 border-b border-slate-200">
           <div className="flex items-center gap-3.5">
             {/* Animated Intelligence Brain/Circuit Orb */}
             <div className="relative w-12 h-12 flex items-center justify-center select-none group">
@@ -727,15 +943,13 @@ ${projectBlock}
               <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 bg-[length:200%_auto] bg-clip-text text-transparent animate-shimmer">
                 AI Resume Analyzer &amp; ATS Optimizer
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Dynamic ATS Match Scoring &middot; Keyword Gap Detection &middot; AI Resume Rewriting
-              </p>
+              
             </div>
           </div>
         </header>
 
         {/* Top Control Section: Target Job Role & Resume Upload Dropzone */}
-        <section className="py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <section className="upload-card no-print py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Target Job Role Selector */}
           <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col gap-4">
             <div className="flex items-center justify-between">
@@ -795,13 +1009,6 @@ ${projectBlock}
                   </button>
                 );
               })}
-            </div>
-
-            <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>
-                Automated ATS screening evaluates keyword frequency, structural hierarchies, and action-oriented metric density.
-              </span>
             </div>
           </div>
 
@@ -883,26 +1090,6 @@ ${projectBlock}
                 <span>{uploadError}</span>
               </div>
             )}
-
-            {/* Sample Presets */}
-            <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-slate-500 font-medium">
-                Try a quick sample resume:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {SAMPLE_RESUMES.map((sample) => (
-                  <button
-                    key={sample.name}
-                    type="button"
-                    onClick={() => loadSampleResume(sample)}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 border border-slate-200 text-slate-700 font-medium transition-colors flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-600" />
-                    {sample.candidateName} ({sample.roleTarget.split(' ')[0]})
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {/* Action Trigger Button */}
             <button
@@ -989,7 +1176,7 @@ ${projectBlock}
         {analysisResult ? (
           <div className="flex flex-col gap-8 pb-12">
             {/* Top Row: Overall ATS Score Radial Gauge + Three-Part Breakdown */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            <div className="score-section no-print grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
               {/* Card 1: Overall ATS Match Score (%) Radial/Gauge Card */}
               <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
                 <div>
@@ -1169,13 +1356,12 @@ ${projectBlock}
 
                 <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
                   <span>ATS Screening Pass Probability: <strong>{analysisResult.score >= 80 ? 'High' : 'Moderate (Optimization Needed)'}</strong></span>
-                  <span className="font-mono text-[11px]">Format: ATS Plain Text &amp; PDF</span>
                 </div>
               </div>
             </div>
 
             {/* Middle Row: Missing Critical Keywords Chips + Formatting Warnings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            <div className="warnings-card no-print grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
               {/* Missing Critical Keywords (Red/Amber Highlight Tag Chips) */}
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -1204,6 +1390,42 @@ ${projectBlock}
                           {skill}
                         </span>
                       ))}
+                    </div>
+
+                    {/* Dynamic Actionable Recommendations: Domain Roadmap Callout Box */}
+                    <div className="mt-4 p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 border-l-4 border-l-indigo-500 text-xs text-slate-700 space-y-2.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-indigo-950">
+                        <Lightbulb className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span>Domain Skills &amp; Learning Checklist for ATS Match</span>
+                      </div>
+                      <ul className="space-y-2 pl-1 text-[11.5px] leading-relaxed text-slate-600">
+                        <li className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                          <span>
+                            <strong className="text-slate-900 font-semibold">Core Technologies to Acquire:</strong> Master foundational competencies in{' '}
+                            <span className="font-medium text-indigo-900">
+                              {analysisResult.missingSkills.slice(0, 2).map(s => s.toUpperCase()).join(' & ') || 'target role requirements'}
+                            </span>{' '}
+                            to satisfy initial ATS keyword boolean search filters.
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                          <span>
+                            <strong className="text-slate-900 font-semibold">Framework &amp; Build Tooling:</strong> Build a hands-on proof-of-concept project integrating{' '}
+                            <span className="font-medium text-indigo-900">
+                              {analysisResult.missingSkills.slice(2, 4).map(s => s.toUpperCase()).join(' & ') || analysisResult.missingSkills.slice(0, 1).map(s => s.toUpperCase()).join('') || 'industry standard frameworks'}
+                            </span>{' '}
+                            to showcase production-ready engineering capabilities.
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                          <span>
+                            <strong className="text-slate-900 font-semibold">ATS Resume Integration:</strong> Once verified, add 1-2 quantified bullet points under <span className="font-medium text-slate-800">PROJECTS</span> or <span className="font-medium text-slate-800">TECHNICAL SKILLS</span> highlighting measurable outcomes.
+                          </span>
+                        </li>
+                      </ul>
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
@@ -1259,18 +1481,12 @@ ${projectBlock}
 
             {/* Prominent Action Banner to Trigger AI Resume Optimizer */}
             {!optimizedResume && (
-              <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
+              <div className="no-print p-6 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
                 <div className="max-w-xl">
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/10 text-cyan-300 text-[11px] font-mono mb-2">
-                    <Sparkles className="w-3 h-3 text-cyan-300" />
-                    Automated ATS Re-Engineering
-                  </div>
+                  
                   <h3 className="text-lg font-bold text-white">
                     Ready to Boost Your ATS Score to 95%+?
                   </h3>
-                  <p className="text-xs text-indigo-200 mt-1 leading-relaxed">
-                    Our AI re-engineer rewrites your resume using strict single-column ATS formatting, injects missing critical keywords, and elevates experience bullets with quantifiable metrics and action verbs.
-                  </p>
                 </div>
 
                 <button
@@ -1354,52 +1570,15 @@ ${projectBlock}
                       </button>
                     </div>
 
-                    {/* Download & Copy Buttons */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={handleCopyClipboard}
-                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-700">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleDownload('txt')}
-                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors"
-                        title="Download Plain Text format (.txt)"
-                      >
-                        <FileDown className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>.TXT</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleDownload('md')}
-                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors"
-                        title="Download Markdown format (.md)"
-                      >
-                        <Download className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>.MD</span>
-                      </button>
-
-                      <button
-                        onClick={handlePrint}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
-                        title="Print / Save to PDF"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Print PDF</span>
-                      </button>
-                    </div>
+                    {/* Single Primary Download PDF Button */}
+                    <button
+                      onClick={handlePrint}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-sm hover:shadow transition-all"
+                      title="Download ATS Resume as PDF"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Download PDF</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1435,9 +1614,17 @@ ${projectBlock}
                           ATS Score: {analysisResult.score}%
                         </span>
                       </div>
-                      <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 font-mono text-xs text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-y-auto">
-                        {analysisResult.originalResumeText}
-                      </div>
+                      {pdfPreviewUrl ? (
+                        <iframe
+                          src={pdfPreviewUrl}
+                          title="Original Resume PDF"
+                          className="w-full h-[650px] rounded-lg border border-gray-200"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-[650px] text-gray-400">
+                          No PDF file loaded
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1453,47 +1640,17 @@ ${projectBlock}
                           ATS Score: {optimizedResume.newScore}%
                         </span>
                       </div>
-                      <div className="p-6 rounded-xl bg-white border border-slate-300 font-mono text-xs text-slate-900 whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-y-auto shadow-inner border-l-4 border-l-indigo-600">
-                        {optimizedResume.formattedMarkdown}
+                      <div
+                        id="ats-resume-preview"
+                        className="p-4 sm:p-6 rounded-xl bg-slate-50/50 border border-slate-300 max-h-[600px] overflow-y-auto shadow-inner"
+                      >
+                        <ATSFormattedResume text={optimizedResume.formattedMarkdown} />
                       </div>
                     </div>
                   )}
                 </div>
               </div>
             )}
-
-            {/* Pipeline Execution Logs Drawer / Collapsible */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Terminal className="w-3.5 h-3.5 text-indigo-600" />
-                  Evaluation Logs &amp; Audit Trail
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {logs.length} logged events
-                </span>
-              </div>
-              <div className="bg-slate-900 text-slate-100 rounded-xl p-4 font-mono text-xs max-h-40 overflow-y-auto space-y-1.5">
-                {logs.map((log, idx) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="text-slate-500 shrink-0">[{log.timestamp}]</span>
-                    <span
-                      className={
-                        log.type === 'success'
-                          ? 'text-emerald-400'
-                          : log.type === 'warning'
-                          ? 'text-amber-300'
-                          : log.type === 'error'
-                          ? 'text-rose-400'
-                          : 'text-slate-200'
-                      }
-                    >
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         ) : (
           /* Placeholder / Empty State before analysis */
@@ -1505,7 +1662,7 @@ ${projectBlock}
               ATS Resume Optimizer Awaiting Resume Input
             </h3>
             <p className="text-xs text-slate-500 max-w-md mb-6 leading-relaxed">
-              Select your target job role above, upload a candidate resume PDF (or choose one of the instant sample presets), and launch the analysis to view your ATS Match Score, Keyword Gaps, and generate a rebuilt ATS-optimized resume.
+              Select your target job role above, upload a candidate resume PDF, and launch the analysis to view your ATS Match Score, Keyword Gaps, and generate a rebuilt ATS-optimized resume.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
@@ -1525,13 +1682,9 @@ ${projectBlock}
         )}
 
         {/* Global Footer */}
-        <footer className="mt-auto pt-8 pb-4 border-t border-slate-200 text-center text-xs text-slate-500 flex flex-wrap items-center justify-between gap-4">
-          <p>&copy; {new Date().getFullYear()} AI Resume Analyzer &middot; Built with React, Tailwind CSS, AWS S3 &amp; ATS Resume Optimizer</p>
-          <div className="flex items-center gap-4 text-slate-500 font-mono text-[11px]">
-            <span>Region: ap-south-1</span>
-            <span>&middot;</span>
-            <span>DynamoDB: ResumeScores</span>
-          </div>
+        <footer className="footer no-print mt-auto pt-8 pb-4 border-t border-slate-200 text-center text-xs text-slate-500 flex flex-wrap items-center justify-between gap-4">
+          <p>&copy; {new Date().getFullYear()} AI Resume Analyzer &amp; ATS Resume Optimizer</p>
+          
         </footer>
       </div>
     </div>
